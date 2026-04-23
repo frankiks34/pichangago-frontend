@@ -32,7 +32,9 @@ const Home = () => {
         <div className="cards-grid">
           {canchasMock.map((cancha) => (
             <div className="cancha-card" key={cancha.id}>
-              <img className="cancha-card-img" src={cancha.foto} alt={cancha.nombre} />
+
+
+              <img className="cancha-card-img" src={cancha.foto} alt={cancha.nombre}loading="lazy" />
               <div className="cancha-card-body">
                 <div className="cancha-card-distrito">{cancha.distrito}</div>
                 <div className="cancha-card-nombre">{cancha.nombre}</div>

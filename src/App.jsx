@@ -1,21 +1,27 @@
+import { lazy, Suspense } from 'react'; // 1. Importar lazy y Suspense
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar'
-import Home from './pages/Home' // Importamos la nueva página
+
 import './index.css'
 
+const Home = lazy(() => import('./pages/Home'));
 function App() {
   return (
-    <BrowserRouter>
+   <BrowserRouter>
       <Navbar />
       
-      <Routes>
-        {/* Cambiamos el div temporal por nuestra página Home real */}
-        <Route path="/" element={<Home />} />
-        
-        <Route path="/buscar" element={<div style={{ padding: '40px' }}><h2>Página de Buscar Canchas 🔍</h2></div>} />
-        <Route path="/perfil-jugador" element={<div style={{ padding: '40px' }}><h2>Perfil del Jugador 👤</h2></div>} />
-        <Route path="*" element={<h2 style={{ padding: '40px' }}>404: Página no encontrada</h2>} />
-      </Routes>
+      {  }
+      <Suspense fallback={
+        <div style={{ padding: '100px', textAlign: 'center' }}>
+          <h2 style={{ fontFamily: 'var(--font-head)' }}>Cargando pichanga... ⚽</h2>
+        </div>
+      }>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          {/* Aquí irán tus otras rutas lazy */}
+          <Route path="*" element={<h2>404 - Página no encontrada</h2>} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }
