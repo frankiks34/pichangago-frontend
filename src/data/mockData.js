@@ -8,7 +8,7 @@ export const canchasMock = [
     precioBase: 80,
     rating: 4.7,
     totalReservas: 312,
-    foto: "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=700&q=80"
+   foto: "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=600&q=80&fm=webp"
   },
   {
     id: "c2",
