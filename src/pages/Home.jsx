@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'; // 1. IMPORTANTE: Agregar esto arriba
 import { canchasMock } from '../data/mockData';
 
 const Home = () => {
@@ -31,24 +32,34 @@ const Home = () => {
 
         <div className="cards-grid">
           {canchasMock.map((cancha) => (
-            <div className="cancha-card" key={cancha.id}>
-
-
-              <img className="cancha-card-img" src={cancha.foto} alt={cancha.nombre}loading="lazy" />
-              <div className="cancha-card-body">
-                <div className="cancha-card-distrito">{cancha.distrito}</div>
-                <div className="cancha-card-nombre">{cancha.nombre}</div>
-                <div className="cancha-card-tipo">{cancha.tipo}</div>
-              </div>
-              <div className="cancha-card-footer">
-                <div className="cancha-price">
-                  S/ {cancha.precioBase.toFixed(2)} <small>/ hora</small>
+            /* 2. ENVOLVER TODO EN UN <Link> */
+            <Link 
+              to={`/cancha/${cancha.id}`} 
+              key={cancha.id} 
+              style={{ textDecoration: 'none', color: 'inherit' }}
+            >
+              <div className="cancha-card">
+                <img 
+                  className="cancha-card-img" 
+                  src={cancha.foto} 
+                  alt={cancha.nombre} 
+                  loading="lazy" 
+                />
+                <div className="cancha-card-body">
+                  <div className="cancha-card-distrito">{cancha.distrito}</div>
+                  <div className="cancha-card-nombre">{cancha.nombre}</div>
+                  <div className="cancha-card-tipo">{cancha.tipo}</div>
                 </div>
-                <div className="cancha-rating">
-                  ⭐ {cancha.rating} <span>({cancha.totalReservas})</span>
+                <div className="cancha-card-footer">
+                  <div className="cancha-price">
+                    S/ {cancha.precioBase.toFixed(2)} <small>/ hora</small>
+                  </div>
+                  <div className="cancha-rating">
+                    ⭐ {cancha.rating} <span>({cancha.totalReservas})</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>
