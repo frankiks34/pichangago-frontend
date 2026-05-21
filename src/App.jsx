@@ -69,7 +69,10 @@ function App() {
           {/* 🔓 RUTAS PÚBLICAS */}
           <Route path="/" element={<Home />} />
           <Route path="/buscar" element={<Buscar />} /> 
-          <Route path="/cancha/:id" element={<CanchaDetail />} />
+          
+          {/* 🎯 CONEXIÓN ESTRELLA: Pasamos la función para abrir el Modal desde la ruta del detalle */}
+          <Route path="/cancha/:id" element={<CanchaDetail onOpenLogin={() => setIsModalOpen(true)} />} />
+          
           <Route path="/status" element={<SystemStatus />} />
 
           {/* 🔐 MIDDLEWARE: SÓLO JUGADORES (Épica 4) */}

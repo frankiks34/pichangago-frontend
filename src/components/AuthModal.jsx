@@ -1,21 +1,55 @@
 import React, { useState } from 'react';
+import { authService } from '../services/authService'; // Conexión a tu API real
 
 const AuthModal = ({ isOpen, onClose, onLogin }) => {
-  const [isIngresar, setIsIngresar] = useState(true); // Controla la pestaña activa
-  const [role, setRole] = useState('JUGADOR'); // Controla el rol seleccionado
+  const [isIngresar, setIsIngresar] = useState(true); 
+  const [role, setRole] = useState('JUGADOR'); 
+  
+  // Estados reales
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [apellido, setApellido] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Simulamos el login pasando el objeto usuario según el rol seleccionado
-    onLogin({
-      name: email.split('@')[0] || (role === 'JUGADOR' ? 'Javier Jugador' : 'Cesar Dueño'),
-      role: role,
-      avatar: role === 'JUGADOR' ? '🏃‍♂️' : '🏟️'
-    });
-    onClose(); // Cerramos el modal tras loguear
+    setIsLoading(true);
+    setErrorMessage('');
+
+    const rolFormateado = role.toUpperCase(); // 'JUGADOR' o 'DUENO'
+
+    try {
+      if (isIngresar) {
+        // 🔑 LOGIN REAL M1
+        const response = await authService.login(email, password);
+        onLogin({
+          name: response.usuario.nombre,
+          role: response.usuario.rol,
+          avatar: response.usuario.nombre.substring(0, 2).toUpperCase()
+        });
+        onClose(); // Cerramos el modal si hay éxito
+      } else {
+        // 📝 REGISTRO REAL M1
+        await authService.register(nombre, apellido, email, password, rolFormateado);
+        
+        // Auto-login tras registro
+        const responseLogin = await authService.login(email, password);
+        onLogin({
+          name: responseLogin.usuario.nombre,
+          role: responseLogin.usuario.rol,
+          avatar: responseLogin.usuario.nombre.substring(0, 2).toUpperCase()
+        });
+        onClose();
+      }
+    } catch (error) {
+      setErrorMessage(error.message || 'Ocurrió un problema de autenticación.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -30,7 +64,6 @@ const AuthModal = ({ isOpen, onClose, onLogin }) => {
         boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
       }}>
         
-        {/* Botón Cerrar (X) */}
         <button onClick={onClose} style={{
           position: 'absolute', top: '20px', right: '20px', background: 'none',
           border: 'none', fontSize: '18px', cursor: 'pointer', color: '#9ca3af'
@@ -40,10 +73,9 @@ const AuthModal = ({ isOpen, onClose, onLogin }) => {
           Acceder a PichangaGo
         </h3>
 
-        {/* TABS: Ingresar / Registrarse */}
         <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: '24px' }}>
           <button 
-            onClick={() => setIsIngresar(true)}
+            onClick={() => { setIsIngresar(true); setErrorMessage(''); }}
             style={{
               flex: 1, paddingBottom: '12px', background: 'none', border: 'none',
               fontWeight: 600, cursor: 'pointer',
@@ -54,7 +86,7 @@ const AuthModal = ({ isOpen, onClose, onLogin }) => {
             Ingresar
           </button>
           <button 
-            onClick={() => setIsIngresar(false)}
+            onClick={() => { setIsIngresar(false); setErrorMessage(''); }}
             style={{
               flex: 1, paddingBottom: '12px', background: 'none', border: 'none',
               fontWeight: 600, cursor: 'pointer',
@@ -66,7 +98,6 @@ const AuthModal = ({ isOpen, onClose, onLogin }) => {
           </button>
         </div>
 
-        {/* SELECTOR DE ROL: Jugador / Dueño */}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
           <button 
             type="button"
@@ -94,40 +125,55 @@ const AuthModal = ({ isOpen, onClose, onLogin }) => {
           </button>
         </div>
 
-        {/* FORMULARIO */}
+        {errorMessage && (
+          <div style={{ backgroundColor: '#fee2e2', color: '#dc2626', padding: '10px', borderRadius: '6px', marginBottom: '15px', fontSize: '0.9em', textAlign: 'center', fontWeight: '500', border: '1px solid #fca5a5' }}>
+            ❌ {errorMessage}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          
+          {!isIngresar && (
+            <>
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '6px', color: '#475569' }}>Nombre</label>
+                <input 
+                  type="text" placeholder="Tu nombre" required value={nombre} onChange={(e) => setNombre(e.target.value)}
+                  style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '6px', color: '#475569' }}>Apellido</label>
+                <input 
+                  type="text" placeholder="Tu apellido" required value={apellido} onChange={(e) => setApellido(e.target.value)}
+                  style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', boxSizing: 'border-box' }}
+                />
+              </div>
+            </>
+          )}
+
           <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '6px', color: '#475569' }}>
-              Correo electrónico
-            </label>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '6px', color: '#475569' }}>Correo electrónico</label>
             <input 
-              type="email" 
-              placeholder="ejemplo@correo.com" 
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="email" placeholder="ejemplo@correo.com" required value={email} onChange={(e) => setEmail(e.target.value)}
               style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', boxSizing: 'border-box' }}
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '6px', color: '#475569' }}>
-              Contraseña
-            </label>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '6px', color: '#475569' }}>Contraseña</label>
             <input 
-              type="password" 
-              placeholder="••••••••" 
-              required
+              type="password" placeholder="••••••••" required value={password} onChange={(e) => setPassword(e.target.value)}
               style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', boxSizing: 'border-box' }}
             />
           </div>
 
-          <button type="submit" style={{
+          <button type="submit" disabled={isLoading} style={{
             width: '100%', padding: '14px', borderRadius: '10px', border: 'none',
             backgroundColor: '#1e2530', color: 'white', fontWeight: 600,
-            cursor: 'pointer', marginTop: '10px', fontSize: '16px'
+            cursor: 'pointer', marginTop: '10px', fontSize: '16px', display: 'flex', justifyContent: 'center'
           }}>
-            {isIngresar ? 'Iniciar Sesión' : 'Registrarse'}
+            {isLoading ? 'Conectando a Azure...' : (isIngresar ? 'Iniciar Sesión' : 'Registrarse')}
           </button>
         </form>
 

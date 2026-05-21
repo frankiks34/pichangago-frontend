@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { authService } from '../services/authService'; // 🔒 Servicio de seguridad real
 
 // ── BANCO DE DATOS REAL
 const CANCHAS_DATA = [
@@ -83,7 +84,8 @@ const CANCHAS_DATA = [
 const DIAS_SEMANA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const STEPS_LABELS = ['Resumen', 'Datos', 'Pago', 'Confirmación'];
 
-const CanchaDetail = () => {
+// 🎯 RECIBIMOS onOpenLogin DESDE LAS PROPS DE TU ENRUTADOR GLOBAL
+const CanchaDetail = ({ onOpenLogin }) => {
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -136,10 +138,29 @@ const CanchaDetail = () => {
     }
   };
 
-  // ── REGLA DE NEGOCIO ÉPICA 3: PAGO 100% ONLINE CON CULQI ──
   const totalPrecio = selectedSlots.reduce((sum, s) => sum + s.precio, 0);
 
+  // 🛡️ REGLA MATRIZ M3 ACTUALIZADA CON FLUJO DE APERTURA INTELIGENTE
   const handleOpenReserva = () => {
+    const currentUser = authService.getCurrentUser();
+
+    // 1. Matriz INVITADO -> ¡Disparamos el login automáticamente sin alert!
+    if (!currentUser) {
+      if (onOpenLogin) {
+        onOpenLogin(); // 🔥 Abre el Modal Flotante al instante
+      } else {
+        alert("Por favor, inicia sesión desde la barra superior.");
+      }
+      return;
+    }
+
+    // 2. Matriz DUEÑO -> Bloqueado con aviso regulatorio
+    if (currentUser.rol === 'DUENO' || currentUser.role === 'DUENO') {
+      alert("⛔ Acceso Restringido: Tu perfil actual es de Dueño de Cancha. Inicia sesión con una cuenta de Jugador para reservar.");
+      return;
+    }
+
+    // 3. Matriz JUGADOR -> Todo conforme
     setStep(1);
     setIsModalOpen(true);
   };
@@ -150,15 +171,6 @@ const CanchaDetail = () => {
       setSelectedSlots([]);
       navigate('/mis-reservas');
     }
-  };
-
-  const procesarPago = (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      setStep(4);
-    }, 1800);
   };
 
   const generarFechasSelector = () => {
@@ -234,7 +246,7 @@ const CanchaDetail = () => {
           </div>
         </div>
 
-        {/* COLUMNA DERECHA: RESERVAS */}
+        {/* COLUMNA DERECHA: SELECCIÓN DE HORARIOS */}
         <div>
           <div className="reserva-panel">
             <div className="reserva-panel-title">📅 Seleccionar horario</div>
@@ -279,7 +291,7 @@ const CanchaDetail = () => {
               })}
             </div>
 
-            {/* PANEL VISTA PREVIA (PAGO ÚNICO 100%) */}
+            {/* VISTA PREVIA DEL TRÁMITE */}
             {selectedSlots.length > 0 ? (
               <div id="adelanto-preview" style={{ display: 'block', animation: 'fadeIn 0.2s ease' }}>
                 <div className="adelanto-info">
@@ -305,7 +317,7 @@ const CanchaDetail = () => {
         </div>
       </div>
 
-      {/* MODAL RESERVAS DE 4 PASOS */}
+      {/* MODAL DE 4 PASOS DE RESERVAS COMPROMETIDAS */}
       {isModalOpen && (
         <div className="overlay" style={{ display: 'flex' }}>
           <div className="modal" style={{ background: 'var(--white)', borderRadius: 'var(--r24)', width: '100%', maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -323,7 +335,6 @@ const CanchaDetail = () => {
                 <div className={`step-item ${step === 4 ? 'active' : ''}`}></div>
               </div>
 
-              {/* PASO 1: RESUMEN Y POLÍTICA DE REEMBOLSO DE 3 ZONAS */}
               {step === 1 && (
                 <>
                   <div className="step-label">Resumen de tu reserva</div>
@@ -337,7 +348,6 @@ const CanchaDetail = () => {
                     </div>
                   </div>
 
-                  {/* 🛡️ POLÍTICA DE REEMBOLSO AÑADIDA */}
                   <div style={{ background: '#F8FAFC', borderRadius: 'var(--r8)', padding: '14px', marginBottom: '16px', border: '1px solid #E2E8F0' }}>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--dark1)', marginBottom: '8px' }}>🛡️ Política de Reembolso</div>
                     <div style={{ fontSize: '12px', color: 'var(--textMid)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -353,16 +363,12 @@ const CanchaDetail = () => {
                     </div>
                   </div>
 
-                  <div style={{ fontSize: '12px', color: 'var(--textMid)', marginBottom: '16px', textAlign: 'center' }}>
-                    ⏱️ Tus slots serán bloqueados por <strong>10 minutos</strong> mientras completas el pago online.
-                  </div>
                   <button className="btn btn-green" style={{ width: '100%', justifyContent: 'center', padding: '14px' }} onClick={() => setStep(2)}>
                     Continuar al Pago →
                   </button>
                 </>
               )}
 
-              {/* PASO 2: DATOS */}
               {step === 2 && (
                 <>
                   <div className="step-label">Confirma tus datos</div>
@@ -376,9 +382,8 @@ const CanchaDetail = () => {
                 </>
               )}
 
-              {/* PASO 3: PAGO */}
               {step === 3 && (
-                <form onSubmit={procesarPago}>
+                <form onSubmit={(e) => { e.preventDefault(); setIsLoading(true); setTimeout(() => { setIsLoading(false); setStep(4); }, 1500); }}>
                   <div className="step-label">Método de pago</div>
                   <div style={{ background: 'var(--gray1)', borderRadius: 'var(--r12)', padding: '14px', marginBottom: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '13px', color: 'var(--textMid)' }}>Total a pagar ahora</span>
@@ -390,65 +395,25 @@ const CanchaDetail = () => {
                       <div className="pago-icon">💳</div>
                       <div className="pago-name">Tarjeta / Culqi</div>
                     </div>
-                    <div className={`pago-card ${selectedPago === 'yape' ? 'active' : ''}`} onClick={() => setSelectedPago('yape')}>
-                      <div className="pago-icon">📱</div>
-                      <div className="pago-name">Yape</div>
-                    </div>
                   </div>
 
-                  {selectedPago === 'culqi' ? (
-                    <div>
-                      <div className="form-group"><label className="form-label">Número de tarjeta</label><input className="form-input" placeholder="4111 1111 1111 1111" required maxLength="19"/></div>
-                      <div style={{ display: 'flex', gap: '10px' }}>
-                        <div className="form-group" style={{ flex: 1 }}><label className="form-label">Vencimiento</label><input className="form-input" placeholder="MM/AA" required maxLength="5"/></div>
-                        <div className="form-group" style={{ flex: 1 }}><label className="form-label">CVV</label><input className="form-input" type="password" placeholder="123" required maxLength="4"/></div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <div style={{ background: 'var(--dark1)', borderRadius: 'var(--r12)', padding: '16px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '13px', color: 'var(--gray4)', marginBottom: '8px' }}>Transferir a</div>
-                        <div style={{ fontFamily: 'var(--font-head)', fontSize: '22px', fontWeight: 800, color: 'var(--white)' }}>{cancha.yape}</div>
-                        <div style={{ fontSize: '12px', color: 'var(--gray4)', marginTop: '4px' }}>{cancha.nombre}</div>
-                      </div>
-                      <div className="form-group" style={{ marginTop: '14px' }}><label className="form-label">Número de operación Yape</label><input className="form-input" placeholder="Ej: YP123456789" required/></div>
-                    </div>
-                  )}
-                  
                   <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
                     <button type="button" className="btn btn-outline" style={{ flex: 1, justifyContent: 'center' }} onClick={handleClose}>Cancelar</button>
                     <button type="submit" className="btn btn-green" disabled={isLoading} style={{ flex: 2, justifyContent: 'center', padding: '14px' }}>
-                      {isLoading ? <><span className="loader" style={{ marginRight: '8px', borderTopColor: 'var(--dark1)' }}></span> Procesando...</> : `🔒 Pagar S/ ${totalPrecio.toFixed(2)}`}
+                      {isLoading ? 'Procesando...' : `🔒 Pagar S/ ${totalPrecio.toFixed(2)}`}
                     </button>
                   </div>
                 </form>
               )}
 
-              {/* PASO 4: CONFIRMACIÓN */}
+            {/* PASO 4: CONFIRMACIÓN */}
               {step === 4 && (
-                <div className="confirmacion">
-                  <div className="check" style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', margin: '0 auto 16px' }}>✓</div>
-                  <div style={{ fontFamily: 'var(--font-head)', fontSize: '22px', fontWeight: 800, marginBottom: '6px' }}>¡Reserva confirmada!</div>
-                  
-                  <div className="codigo-reserva">PG-2026-R{Math.floor(1800 + Math.random() * 200)}</div>
-                  
-                  <div style={{ fontSize: '13px', color: 'var(--textMid)', marginBottom: '20px' }}>{cancha.nombre} · {selectedSlots.length} hora(s) elegida(s)</div>
-                  
-                  <div style={{ background: 'var(--dark1)', borderRadius: 'var(--r12)', padding: '14px', textAlign: 'left', marginBottom: '18px' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--gray4)', marginBottom: '8px' }}>RECUERDA AL LLEGAR</div>
-                    <div style={{ fontSize: '13px', color: 'var(--gray3)', lineHeight: 1.7 }}>
-                      📱 Muestra tu código de reserva al administrador del complejo.<br/>
-                      ✅ Tu reserva ha sido pagada al <strong>100% online</strong>. ¡Disfruta el partido!
-                    </div>
-                  </div>
-                  
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button className="btn btn-outline" style={{ flex: 1, justifyContent: 'center' }} onClick={handleClose}>Mis reservas</button>
-                    <button className="btn btn-dark" style={{ flex: 1, justifyContent: 'center', fontWeight: 600 }} onClick={handleClose}>⬇️ PDF</button>
-                  </div>
-                </div>
+                <div className="confirmacion" style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '32px', marginBottom: '16px' }}>✓</div>
+                  <div style={{ fontSize: '22px', fontWeight: 800, marginBottom: '6px' }}>¡Reserva confirmada!</div>
+                  <button className="btn btn-green" style={{ width: '100%', marginTop: '16px' }} onClick={handleClose}>Listo</button>
+                </div> // 📌 ¡CORREGIDO! Aquí cerramos el div en lugar de usar </>
               )}
-
             </div>
           </div>
         </div>

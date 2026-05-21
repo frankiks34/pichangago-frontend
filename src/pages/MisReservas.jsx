@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { authService } from '../services/authService'; // 🔒 IMPORTAMOS SEGURIDAD
 
 // ── DATA REAL DE TU PROTOTIPO (pichangago-data.js)
 const CANCHAS_MOCK = {
@@ -15,17 +17,29 @@ const RESERVAS_MOCK = [
 ];
 
 const MisReservas = () => {
-  const [activeTab, setActiveTab] = useState('proximas'); // 'proximas' o 'historial'
+  const [activeTab, setActiveTab] = useState('proximas'); 
   const [selectedReserva, setSelectedReserva] = useState(null);
   const [reservas, setReservas] = useState(RESERVAS_MOCK);
+  const navigate = useNavigate();
 
-  // Filtrar según la pestaña activa
+  // 🛡️ REGLA MATRIZ M4: BLOQUEO DE RUTA PARA INVITADOS Y DUEÑOS
+  useEffect(() => {
+    const currentUser = authService.getCurrentUser();
+    
+    if (!currentUser) {
+      alert("⚠️ Acceso Restringido: Debes iniciar sesión para ver tus reservas.");
+      navigate('/');
+    } else if (currentUser.rol === 'DUENO' || currentUser.role === 'DUENO') {
+      alert("⛔ Acceso Restringido: El historial de reservas es exclusivo para el perfil de Jugador.");
+      navigate('/');
+    }
+  }, [navigate]);
+
   const filtradas = reservas.filter(r => {
     if (activeTab === 'proximas') return r.estado === 'confirmada';
-    return r.estado !== 'confirmada'; // completada, no_show, cancelada
+    return r.estado !== 'confirmada';
   });
 
-  // Estilos de los badges según el estado de la reserva
   const getBadgeClass = (estado) => {
     return {
       confirmada: 'badge-green',
@@ -45,7 +59,6 @@ const MisReservas = () => {
   };
 
   const handleCancelarReserva = (id) => {
-    // Cambiamos el estado a cancelada de forma reactiva
     setReservas(reservas.map(r => r.id === id ? { ...r, estado: 'cancelada' } : r));
     setSelectedReserva(null);
     alert('✅ Tu reserva ha sido cancelada con éxito y se procesará tu reembolso según las políticas de la zona.');
@@ -60,7 +73,6 @@ const MisReservas = () => {
           <p className="section-sub">Gestiona tus partidos y revisa tus comprobantes de pago</p>
         </div>
 
-        {/* CONTENEDOR DE PESTAÑAS (TABS) */}
         <div className="reservas-tabs">
           <button 
             className={`tab-btn ${activeTab === 'proximas' ? 'active' : ''}`} 
@@ -76,7 +88,6 @@ const MisReservas = () => {
           </button>
         </div>
 
-        {/* LISTADO DE ITEMS */}
         <div id="reservas-lista">
           {filtradas.length > 0 ? (
             filtradas.map(r => {
@@ -118,7 +129,6 @@ const MisReservas = () => {
 
       </div>
 
-      {/* MODAL DETALLE DE RESERVA */}
       {selectedReserva && (() => {
         const cancha = CANCHAS_MOCK[selectedReserva.canchaId];
         return (
