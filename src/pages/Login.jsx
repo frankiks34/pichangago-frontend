@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authService } from '../services/authService'; // Asegúrate de que la ruta apunte bien a tu authService.js
+import { authService } from '../services/authService'; // Ruta correcta hacia su propio archivo
 
 const Login = ({ onLogin }) => {
-  const [authMode, setAuthMode] = useState('login'); // 'login' o 'register'
-  const [selectedRole, setSelectedRole] = useState('jugador'); // 'jugador' o 'dueno'
+  const [authMode, setAuthMode] = useState('login'); 
+  const [selectedRole, setSelectedRole] = useState('jugador'); 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // 📝 ESTADOS PARA CAPTURAR LOS DATOS DE LOS INPUTS REALES
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nombre, setNombre] = useState('');
@@ -16,38 +15,30 @@ const Login = ({ onLogin }) => {
 
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+ const handleSubmit = async (e) => {
+    if (e) e.preventDefault(); // Evita que se recargue la página si viene del formulario
+    console.log("⚽ ¡AHORA SÍ SE DISPARÓ LA FUNCIÓN YAHOO!"); 
     setIsLoading(true);
-    setErrorMessage(''); // Limpiar errores previos
+    setErrorMessage(''); 
 
-    const rolFormateado = selectedRole.toUpperCase(); // 'JUGADOR' o 'DUENO'
+    const rolFormateado = selectedRole.toUpperCase(); 
 
     try {
       if (authMode === 'login') {
-        // ==========================================
-        // 🔑 FLUJO REAL DE LOGIN (M1)
-        // ==========================================
         const response = await authService.login(email, password);
         
-        // Formateamos los datos para mantener compatibilidad con tu App.jsx
         const userSession = {
           name: response.usuario.nombre,
           role: response.usuario.rol,
           avatar: response.usuario.nombre.substring(0, 2).toUpperCase()
         };
 
-        onLogin(userSession); // Actualiza el estado global de tu sesión en App.jsx
-        navigate('/'); // Redirección al Home o Dashboard
+        onLogin(userSession); 
+        navigate('/'); 
 
       } else {
-        // ==========================================
-        // 📝 FLUJO REAL DE REGISTRO (M1)
-        // ==========================================
-        // Si se registra, enviamos los campos que exige tu tabla de Azure
         await authService.register(nombre, apellido, email, password, rolFormateado);
         
-        // Auto-login inmediato tras registrarse para mejorar la experiencia de usuario
         const responseLogin = await authService.login(email, password);
         
         const userSession = {
@@ -60,7 +51,6 @@ const Login = ({ onLogin }) => {
         navigate('/');
       }
     } catch (error) {
-      // Capturamos el mensaje de error HTTP controlado que viene desde tu backend en Render
       setErrorMessage(error.message || 'Ocurrió un problema con la autenticación.');
     } finally {
       setIsLoading(false);
@@ -76,7 +66,6 @@ const Login = ({ onLogin }) => {
         </div>
 
         <div className="modal-body">
-          {/* TABS DE LOGIN / REGISTRO */}
           <div className="auth-tabs">
             <div 
               className={`auth-tab ${authMode === 'login' ? 'active' : ''}`} 
@@ -92,7 +81,6 @@ const Login = ({ onLogin }) => {
             </div>
           </div>
           
-          {/* OPCIONES DE ROL */}
           <div className="role-options">
             <div 
               className={`role-opt ${selectedRole === 'jugador' ? 'active' : ''}`} 
@@ -108,7 +96,6 @@ const Login = ({ onLogin }) => {
             </div>
           </div>
 
-          {/* ⚠️ ALERTA DE ERROR VISUAL (REQUERIDO POR LA RÚBRICA DE CONTROL DE ACCESOS) */}
           {errorMessage && (
             <div style={{ backgroundColor: '#fee2e2', color: '#dc2626', padding: '10px', borderRadius: '6px', marginBottom: '15px', fontSize: '0.9em', textAlign: 'center', fontWeight: '500', border: '1px solid #fca5a5' }}>
               ❌ {errorMessage}
@@ -116,7 +103,6 @@ const Login = ({ onLogin }) => {
           )}
 
           <form onSubmit={handleSubmit}>
-            {/* CAMPOS ADICIONALES SOLO PARA REGISTRO */}
             {authMode === 'register' && (
               <>
                 <div className="form-group">
@@ -168,7 +154,6 @@ const Login = ({ onLogin }) => {
               />
             </div>
 
-            {/* CONTROL DE NEGOCIO: RUC PARA DUEÑO (MANTENIDO PARA EL CASO DE USO) */}
             {authMode === 'register' && selectedRole === 'dueno' && (
               <div className="form-group" id="ruc-field">
                 <label className="form-label">RUC de la Cancha / Empresa</label>
@@ -176,10 +161,11 @@ const Login = ({ onLogin }) => {
               </div>
             )}
 
-            <button 
+           <button 
               type="submit" 
               className="btn btn-dark" 
               disabled={isLoading}
+              onClick={handleSubmit} // 🎯 ¡ESTO OBLIGA A REACT A DISPARAR LA FUNCIÓN AL HACER CLIC!
               style={{ width: '100%', justifyContent: 'center', padding: '14px', marginTop: '10px' }}
             >
               {isLoading 
