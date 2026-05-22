@@ -49,18 +49,30 @@ export const authService = {
     }
   },
 
-  logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken'); // NUEVO: Limpiamos la llave maestra
-    localStorage.removeItem('usuario');
-    window.location.href = '/login';
+logout: async () => {
+    try {
+      const refreshToken = localStorage.getItem('refreshToken');
+      
+      if (refreshToken) {
+        // 🚀 Le avisamos al servidor para que destruya esta sesión en todo el planeta
+        await fetch(`${API_URL}/api/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+      }
+    } catch (error) {
+      console.error('Error al notificar el logout global:', error);
+    } finally {
+      // 🧹 Pase lo que pase con el internet, limpiamos la máquina local del usuario
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('usuario');
+      
+      // Redirección limpia al inicio/login
+      window.location.href = '/';
+    }
   },
-
-  getCurrentUser: () => {
-    const userStr = localStorage.getItem('usuario');
-    return userStr ? JSON.parse(userStr) : null;
-  },
-
   // =========================================================
   // 🛡️ HU-06: LÓGICA DE REFRESCO SILENCIOSO (NUEVO)
   // =========================================================
