@@ -1,7 +1,17 @@
-// src/services/authService.js
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export const authService = {
+
+  getCurrentUser: () => {
+    const userStr = localStorage.getItem('usuario');
+    if (!userStr) return null;
+    try {
+      return JSON.parse(userStr);
+    } catch (e) {
+      return null;
+    }
+  },
+
   register: async (nombre, apellido, email, password, rol) => {
     try {
       const response = await fetch(`${API_URL}/api/register`, {
@@ -9,14 +19,10 @@ export const authService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nombre, apellido, email, password, rol }),
       });
-
       const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Error en el registro');
-      }
+      if (!response.ok) throw new Error(data.error || 'Error en el registro');
       return data;
     } catch (error) {
-      console.error('Error en authService.register:', error);
       throw error;
     }
   },
@@ -28,56 +34,43 @@ export const authService = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-
       const data = await response.json();
-      
-      // 🚨 AQUÍ VIAJAN TUS MENSAJES DE ERROR ("Te quedan X intentos", "Cuenta bloqueada")
-      if (!response.ok) {
-        throw new Error(data.error || 'Error en el login');
-      }
+      if (!response.ok) throw new Error(data.error || 'Error en el login');
 
       if (data.token) {
-        localStorage.setItem('token', data.token); // Llave de 15 min
-        localStorage.setItem('refreshToken', data.refreshToken); // NUEVO: Llave maestra de 7 días
+        localStorage.setItem('token', data.token); 
+        localStorage.setItem('refreshToken', data.refreshToken); 
         localStorage.setItem('usuario', JSON.stringify(data.usuario));
       }
-
       return data;
     } catch (error) {
-      console.error('Error en authService.login:', error);
-      throw error; // Lanzamos el error para que tu Login.jsx lo atrape
+      throw error; 
     }
   },
 
-logout: async () => {
-    try {
-      const refreshToken = localStorage.getItem('refreshToken');
-      
-      if (refreshToken) {
-        // 🚀 Le avisamos al servidor para que destruya esta sesión en todo el planeta
-        await fetch(`${API_URL}/api/logout`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
-        });
-      }
-    } catch (error) {
-      console.error('Error al notificar el logout global:', error);
-    } finally {
-      // 🧹 Pase lo que pase con el internet, limpiamos la máquina local del usuario
-      localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('usuario');
-      
-      // Redirección limpia al inicio/login
-      window.location.href = '/';
+ 
+logout: async (esManual = true) => {
+  try {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (esManual && refreshToken) {
+      await fetch(`${API_URL}/api/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
     }
-  },
-  // =========================================================
-  // 🛡️ HU-06: LÓGICA DE REFRESCO SILENCIOSO (NUEVO)
-  // =========================================================
-  
-  // Método auxiliar que pide la nueva llave corta al backend
+  } catch (error) {
+    console.error('Error al notificar el logout:', error);
+  } finally {
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('usuario');
+
+    document.cookie = "pichangago_session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Strict";
+    window.location.href = '/';
+  }
+},
+
   refreshAccessToken: async () => {
     try {
       const refreshToken = localStorage.getItem('refreshToken');
@@ -89,42 +82,35 @@ logout: async () => {
         body: JSON.stringify({ refreshToken }),
       });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error('Refresh token inválido o caducado');
+      // 🛡️ SI AZURE SE COLAPSA (500), lanzamos el error especial
+      if (response.status >= 500) {
+        throw new Error('SATURACION_BD');
+      }
 
-      // Guardamos la nueva llave corta en el navegador
+      const data = await response.json();
+      if (!response.ok) throw new Error('Token inválido o caducado');
+
       localStorage.setItem('token', data.accessToken);
       return data.accessToken;
     } catch (error) {
-      // Si el hacker manipuló la llave maestra o caducó a los 7 días, lo botamos
-      authService.logout();
+  
+      if (error.message !== 'SATURACION_BD') {
+        authService.logout(false); 
+      }
       throw error;
     }
   },
 
-  // Tu "Interceptor" nativo: Usa este método en vez de fetch() normal para rutas protegidas
   fetchProtected: async (endpoint, options = {}) => {
     let token = localStorage.getItem('token');
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-      ...options.headers,
-    };
-
-    // 1. Intentamos la petición normal
+    const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...options.headers };
     let response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
 
-    // 2. Si el servidor dice que la llave corta expiró (401)
     if (response.status === 401) {
-      // Pedimos una nueva llave silenciosamente
       const newToken = await authService.refreshAccessToken();
-
-      // 3. Reintentamos la jugada original con la llave nueva
       headers['Authorization'] = `Bearer ${newToken}`;
       response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
     }
-
     return response;
   }
 };

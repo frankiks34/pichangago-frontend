@@ -6,27 +6,28 @@ const Navbar = ({ user, onLogout, onOpenLogin }) => {
   const [isOpen, setIsOpen] = useState(false); 
   const location = useLocation();
 
-  // 🚨 RADAR AUTOMÁTICO: Valida token + TOKEN_VERSION en BD cada 3 segundos
+
   useEffect(() => {
-    const radarBackend = async () => {
-      if (user && localStorage.getItem('token')) {
-        try {
-          const response = await authService.fetchProtected('/api/validate-session');
-          if (response.status === 403) {
-            onLogout();
-          }
-        } catch (error) {
-          // Error de red, ignorar
+  const radarBackend = async () => {
+    if (user && localStorage.getItem('token')) {
+      try {
+        const response = await authService.fetchProtected('/api/validate-session');
+        if (response.status === 403) {
+        
+          await authService.logout(false);
         }
+      } catch (error) {
+       
       }
-    };
+    }
+  };
 
-    radarBackend();
-    const radarInterval = setInterval(radarBackend, 3000);
-    return () => clearInterval(radarInterval);
-  }, [location.pathname, user, onLogout]);
+  radarBackend();
+  const radarInterval = setInterval(radarBackend, 3000);
+  return () => clearInterval(radarInterval);
+}, [location.pathname, user, onLogout]);
 
-  // 🚨 SINCRONIZACIÓN ENTRE PESTAÑAS DEL MISMO CONTEXTO
+ 
   useEffect(() => {
     const sincronizarPestanas = (e) => {
       if (e.key === 'refreshToken' && e.newValue === null) {

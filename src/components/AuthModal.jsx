@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { authService } from '../services/authService'; 
 
 const AuthModal = ({ isOpen, onClose, onLogin }) => {
-  const [authMode, setAuthMode] = useState('login'); // 'login', 'register' o 'forgot'
+  const [authMode, setAuthMode] = useState('login');
   const [role, setRole] = useState('JUGADOR'); 
   
-  // Estados de los inputs
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nombre, setNombre] = useState('');
@@ -15,7 +15,7 @@ const AuthModal = ({ isOpen, onClose, onLogin }) => {
   const [successMessage, setSuccessMessage] = useState('');
 
   if (!isOpen) return null;
-// En AuthModal.jsx cambia el enlace estático por la variable de entorno global:
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   const handleSubmit = async (e) => {
@@ -72,7 +72,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
           {authMode === 'forgot' ? 'Recuperar Contraseña' : 'Acceder a PichangaGo'}
         </h3>
 
-        {/* TABS DE NAVEGACIÓN SUPERIOR */}
+       
         {authMode !== 'forgot' && (
           <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: '24px' }}>
             <button 
@@ -92,7 +92,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
           </div>
         )}
 
-        {/* SELECTOR DE ROL */}
+    
         {authMode === 'register' && (
           <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
             <button type="button" onClick={() => setRole('JUGADOR')} style={{ flex: 1, padding: '10px', borderRadius: '10px', cursor: 'pointer', border: role === 'JUGADOR' ? '2px solid #00b48a' : '1px solid #e2e8f0', backgroundColor: role === 'JUGADOR' ? '#e6f8f4' : 'white', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px' }}>
