@@ -16,17 +16,11 @@ const SystemStatus = lazy(() => import('./pages/SystemStatus'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 
 // PÁGINAS DEL DUEÑO
+const PanelDueno = lazy(() => import('./pages/dueno/PanelDueno'));
 const DuenoOnboarding = lazy(() => import('./pages/dueno/DuenoOnboarding'));
 const RegistroCanchaForm = lazy(() => import('./pages/dueno/RegistroCanchaForm'));
 const PerfilFinanciero = lazy(() => import('./pages/dueno/PerfilFinanciero'));
 
-// 🚧 COMPONENTE TEMPORAL (Evita el error de archivo no encontrado hasta iniciar la Épica 5)
-const PanelDuenoPlaceholder = () => (
-  <div className="view active page-wrap" style={{ padding: '80px 24px', textAlign: 'center' }}>
-    <h2 className="section-title" style={{ fontSize: '24px', marginBottom: '8px' }}>Panel Dueño — Épica 5 🏟️</h2>
-    <p style={{ color: 'var(--textMid)', fontSize: '14px' }}>Métricas de ingresos, cobro de comisiones del 5% y gestión de ofertas.</p>
-  </div>
-);
 
 // 🛡️ COMPONENTE DE PROTECCIÓN DE RUTAS (MIDDLEWARE INTERCEPTOR)
 const ProtectedRoute = ({ allowedRoles, user }) => {
@@ -89,8 +83,8 @@ function App() {
 
           {/* 🔐 MIDDLEWARE: SÓLO DUEÑOS (Épica 5) */}
           <Route element={<ProtectedRoute user={user} allowedRoles={['DUEÑO', 'DUENO']} />}>
-            {/* Ruta base del Panel */}
-            <Route path="/panel-dueno" element={<PanelDuenoPlaceholder />} />
+            {/* 📈 Conectamos la ruta base a tu componente oficial inteligente */}
+            <Route path="/panel-dueno" element={<PanelDueno />} />
             
             {/* 🏁 Rutas del Momento 1: Onboarding y Configuraciones */}
             <Route path="/panel-dueno/onboarding" element={<DuenoOnboarding />} />

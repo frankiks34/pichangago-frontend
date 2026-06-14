@@ -16,10 +16,16 @@ export default function DuenoOnboarding() {
 
     // Agregar un horario temporalmente a la tabla visual de React
     const agregarHorarioALista = () => {
-        // Formateamos las horas al ISO String genérico que espera el Backend de SQL Server
-        const fechaBase = "2026-06-15T"; // Usamos una fecha pivote para pasar el DateTime
+        setMensajeHorario('');
+        
+        // Validación básica de coherencia horaria
+        if (nuevoHorario.horaInicio >= nuevoHorario.horaFin) {
+            return setMensajeHorario('⚠️ La hora de inicio debe ser menor que la hora de fin.');
+        }
+
+        const fechaBase = "2026-06-15T"; // Fecha pivote requerida por SQL Server
         const itemFormateado = {
-            diaSemana: parseInt(nuevoHorario.diaSemana),
+            diaSemana: parseInt(nuevoHorario.diaSemana, 10), // Forzamos base decimal
             horaInicio: `${fechaBase}${nuevoHorario.horaInicio}:00`,
             horaFin: `${fechaBase}${nuevoHorario.horaFin}:00`,
             tipoPrecio: nuevoHorario.tipoPrecio
@@ -38,22 +44,22 @@ export default function DuenoOnboarding() {
         
         if (res.status === 'success') {
             alert('🎉 ¡Onboarding completado exitosamente! Tu cancha ya está operativa para recibir reservas.');
-            window.location.href = '/panel-dueno/dashboard'; // Redirección al Momento 2
+            window.location.href = '/panel-dueno'; // Redirección limpia al panel integrador
         } else {
             setMensajeHorario(res.error || 'Error al guardar el cronograma.');
         }
     };
 
     return (
-        <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+        <div style={{ padding: '80px 24px', fontFamily: 'Arial, sans-serif' }}>
             {/* Indicador visual de pasos */}
-            <div style={{ display: 'flex', justifyContent: 'space-around', background: '#f0f4f8', padding: '15px', borderRadius: '8px', marginBottom: '3px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-around', background: '#f0f4f8', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
                 <span style={{ fontWeight: paso === 1 ? 'bold' : 'normal', color: paso === 1 ? '#00b48a' : '#999' }}>1. Registrar Cancha</span>
                 <span style={{ fontWeight: paso === 2 ? 'bold' : 'normal', color: paso === 2 ? '#00b48a' : '#999' }}>2. Configurar Cobros</span>
                 <span style={{ fontWeight: paso === 3 ? 'bold' : 'normal', color: paso === 3 ? '#00b48a' : '#999' }}>3. Asignar Horarios y Tarifas</span>
             </div>
 
-            {/* RENDERIZADO DINÁMICO SEGÚN EL PASO ACTUAL */}
+            {/* RENDERIZADO DINÁMICO */}
             {paso === 1 && (
                 <RegistroCanchaForm onCanchaCreada={(id) => {
                     setIdCanchaCreada(id);
@@ -70,9 +76,9 @@ export default function DuenoOnboarding() {
                     <h2>📅 Configuración de Disponibilidad y Precios</h2>
                     <p style={{ fontSize: '14px', color: '#666' }}>Arma el cronograma de tu cancha. Puedes agregar múltiples turnos por día.</p>
 
-                    {mensajeHorario && <p style={{ color: 'red' }}>{mensajeHorario}</p>}
+                    {mensajeHorario && <p style={{ color: 'red', fontWeight: 'bold' }}>{mensajeHorario}</p>}
 
-                    {/* Controles para armar un bloque horario */}
+                    {/* Controles para armar un bloque horario - AHORA CONTROLADOS */}
                     <div style={{ display: 'grid', gap: '10px', background: '#f9f9f9', padding: '15px', borderRadius: '6px', marginBottom: '20px' }}>
                         <div>
                             <label>Día de la semana: </label>
@@ -82,19 +88,19 @@ export default function DuenoOnboarding() {
                         </div>
                         <div>
                             <label>Rango Horario: </label>
-                            <input type="time" value={nuevoHorario.horaInicio} onChange={e => setNuevoHorario({...nuevoHorario, horaInicio: e.target.value})} /> 
+                            <input type="time" value={nuevoHorario.horaInicio} onChange={e => setNuevoHorario({...nuevoHorario, horaInicio: e.target.value})} style={{ padding: '4px' }} /> 
                             <span> a </span>
-                            <input type="time" value={nuevoHorario.horaFin} onChange={e => setNuevoHorario({...nuevoHorario, horaFin: e.target.value})} />
+                            <input type="time" value={nuevoHorario.horaFin} onChange={e => setNuevoHorario({...nuevoHorario, horaFin: e.target.value})} style={{ padding: '4px' }} />
                         </div>
                         <div>
                             <label>Tarifa aplicable: </label>
-                            <select value={nuevoHorario.tipoPrecio} onChange={e => setNuevoHorario({...nuevoHorario, tipoPrecio: e.target.value})}>
+                            <select value={nuevoHorario.tipoPrecio} onChange={e => setNuevoHorario({...nuevoHorario, tipoPrecio: e.target.value})} style={{ padding: '4px' }}>
                                 <option value="BASE">Precio Base (🟢 Estándar)</option>
                                 <option value="PRIME">Precio Prime (🔴 Noches/Fin de semana)</option>
                                 <option value="BAJA">Precio Valle/Baja (🟡 Mañanas/Días muertos)</option>
                             </select>
                         </div>
-                        <button type="button" onClick={agregarHorarioALista} style={{ background: '#1e2530', color: 'white', padding: '8px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                        <button type="button" onClick={agregarHorarioALista} style={{ background: '#1e2530', color: 'white', padding: '10px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
                             ➕ Añadir este bloque al cronograma
                         </button>
                     </div>
