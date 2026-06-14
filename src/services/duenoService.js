@@ -38,5 +38,34 @@ export const duenoService = {
             body: JSON.stringify({ horarios: listaHorarios })
         });
         return response.json();
+    },
+
+    // D-07 y D-08: Obtener la agenda de partidos de un día específico
+    obtenerAgendaDiaria: async (fecha) => {
+        const response = await fetch(`${API_URL}/agenda/diaria?fecha=${fecha}`, {
+            method: 'GET',
+            headers: getAuthHeaders()
+        });
+        return response.json();
+    },
+
+    // D-10 y D-11: Bloquear slot manualmente o reportar No-Show
+    actualizarEstadoSlot: async (idSlot, nuevoEstado) => {
+        const response = await fetch(`${API_URL}/slots/${idSlot}/estado`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ nuevoEstado })
+        });
+        return response.json();
+    },
+
+    // D-12: Publicar una oferta relámpago para un slot vacío
+    crearOfertaSlot: async (idSlot, datosOferta) => {
+        const response = await fetch(`${API_URL}/slots/${idSlot}/oferta`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(datosOferta) // { porcentajeDescuento, precioOfertado, fechaExpira }
+        });
+        return response.json();
     }
 };
