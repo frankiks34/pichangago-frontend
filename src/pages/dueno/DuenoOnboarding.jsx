@@ -2,6 +2,7 @@ import { useState } from 'react';
 import RegistroCanchaForm from './RegistroCanchaForm';
 import PerfilFinanciero from './PerfilFinanciero';
 import { duenoService } from '../../services/duenoService';
+import { generarBloquesHorarios } from '../../utils/horarios';
 
 export default function DuenoOnboarding() {
     const [paso, setPaso] = useState(1); // Paso 1: Cancha, Paso 2: Finanzas, Paso 3: Horarios
@@ -13,25 +14,31 @@ export default function DuenoOnboarding() {
     const [mensajeHorario, setMensajeHorario] = useState('');
 
     const dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const diaValue = (index) => index === 6 ? 0 : index + 1;
 
-    // Agregar un horario temporalmente a la tabla visual de React
     const agregarHorarioALista = () => {
         setMensajeHorario('');
         
-        // Validación básica de coherencia horaria
         if (nuevoHorario.horaInicio >= nuevoHorario.horaFin) {
             return setMensajeHorario('⚠️ La hora de inicio debe ser menor que la hora de fin.');
         }
 
-        const fechaBase = "2026-06-15T"; // Fecha pivote requerida por SQL Server
-        const itemFormateado = {
-            diaSemana: parseInt(nuevoHorario.diaSemana, 10), // Forzamos base decimal
-            horaInicio: `${fechaBase}${nuevoHorario.horaInicio}:00`,
-            horaFin: `${fechaBase}${nuevoHorario.horaFin}:00`,
-            tipoPrecio: nuevoHorario.tipoPrecio
-        };
+        const bloques = generarBloquesHorarios(nuevoHorario.horaInicio, nuevoHorario.horaFin);
+        const dia = parseInt(nuevoHorario.diaSemana, 10);
+        const nuevos = bloques.filter(b => !listaHorarios.some(h =>
+            h.diaSemana === dia && h.horaInicio === b.horaInicio
+        ));
+        if (nuevos.length === 0) {
+            return setMensajeHorario('⚠️ Todos los bloques en este rango ya están agregados.');
+        }
 
-        setListaHorarios([...listaHorarios, itemFormateado]);
+        setListaHorarios([...listaHorarios, ...nuevos.map(b => ({
+            diaSemana: dia,
+            horaInicio: b.horaInicio,
+            horaFin: b.horaFin,
+            tipoPrecio: nuevoHorario.tipoPrecio
+        }))]);
+        if (nuevos.length > 1) setMensajeHorario(`✅ ${nuevos.length} bloques de 1 hora agregados.`);
     };
 
     // Enviar todos los horarios juntos al Backend (Bulk Insert)
@@ -41,10 +48,10 @@ export default function DuenoOnboarding() {
         }
 
         const res = await duenoService.configurarHorariosTarifas(idCanchaCreada, listaHorarios);
-        
+
         if (res.status === 'success') {
-            alert('🎉 ¡Onboarding completado exitosamente! Tu cancha ya está operativa para recibir reservas.');
-            window.location.href = '/panel-dueno'; // Redirección limpia al panel integrador
+            await duenoService.generarSlotsDesdeHorarios(idCanchaCreada).catch(() => {});
+            window.location.href = '/panel-dueno';
         } else {
             setMensajeHorario(res.error || 'Error al guardar el cronograma.');
         }
@@ -76,25 +83,27 @@ export default function DuenoOnboarding() {
                     <h2>📅 Configuración de Disponibilidad y Precios</h2>
                     <p style={{ fontSize: '14px', color: '#666' }}>Arma el cronograma de tu cancha. Puedes agregar múltiples turnos por día.</p>
 
-                    {mensajeHorario && <p style={{ color: 'red', fontWeight: 'bold' }}>{mensajeHorario}</p>}
+                    <div aria-live="polite" aria-atomic="true" role="status" style={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>{mensajeHorario}</div>
+                    {mensajeHorario && <p role="alert" style={{ color: 'red', fontWeight: 'bold', padding: '8px', background: '#fee2e2', borderRadius: '6px' }}>{mensajeHorario}</p>}
 
                     {/* Controles para armar un bloque horario - AHORA CONTROLADOS */}
                     <div style={{ display: 'grid', gap: '10px', background: '#f9f9f9', padding: '15px', borderRadius: '6px', marginBottom: '20px' }}>
                         <div>
-                            <label>Día de la semana: </label>
-                            <select value={nuevoHorario.diaSemana} onChange={e => setNuevoHorario({...nuevoHorario, diaSemana: e.target.value})}>
-                                {dias.map((d, index) => <option key={d} value={index + 1}>{d}</option>)}
+                            <label htmlFor="ob-dia">Día de la semana:</label>
+                            <select id="ob-dia" value={nuevoHorario.diaSemana} onChange={e => setNuevoHorario({...nuevoHorario, diaSemana: e.target.value})}>
+                                {dias.map((d, index) => <option key={d} value={diaValue(index)}>{d}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label>Rango Horario: </label>
-                            <input type="time" value={nuevoHorario.horaInicio} onChange={e => setNuevoHorario({...nuevoHorario, horaInicio: e.target.value})} style={{ padding: '4px' }} /> 
+                            <label htmlFor="ob-horaInicio">Rango Horario:</label>
+                            <input id="ob-horaInicio" type="time" value={nuevoHorario.horaInicio} onChange={e => setNuevoHorario({...nuevoHorario, horaInicio: e.target.value})} style={{ padding: '4px' }} aria-describedby="ob-rango-help" /> 
                             <span> a </span>
-                            <input type="time" value={nuevoHorario.horaFin} onChange={e => setNuevoHorario({...nuevoHorario, horaFin: e.target.value})} style={{ padding: '4px' }} />
+                            <input id="ob-horaFin" type="time" value={nuevoHorario.horaFin} onChange={e => setNuevoHorario({...nuevoHorario, horaFin: e.target.value})} style={{ padding: '4px' }} />
+                            <span id="ob-rango-help" style={{ fontSize: '11px', color: '#888', display: 'block' }}>Hora inicio — Hora fin</span>
                         </div>
                         <div>
-                            <label>Tarifa aplicable: </label>
-                            <select value={nuevoHorario.tipoPrecio} onChange={e => setNuevoHorario({...nuevoHorario, tipoPrecio: e.target.value})} style={{ padding: '4px' }}>
+                            <label htmlFor="ob-tarifa">Tarifa aplicable:</label>
+                            <select id="ob-tarifa" value={nuevoHorario.tipoPrecio} onChange={e => setNuevoHorario({...nuevoHorario, tipoPrecio: e.target.value})} style={{ padding: '4px' }}>
                                 <option value="BASE">Precio Base (🟢 Estándar)</option>
                                 <option value="PRIME">Precio Prime (🔴 Noches/Fin de semana)</option>
                                 <option value="BAJA">Precio Valle/Baja (🟡 Mañanas/Días muertos)</option>
@@ -118,8 +127,8 @@ export default function DuenoOnboarding() {
                         <tbody>
                             {listaHorarios.map((h, i) => (
                                 <tr key={i} style={{ textAlign: 'center' }}>
-                                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{dias[h.diaSemana - 1]}</td>
-                                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{h.horaInicio.split('T')[1].substring(0,5)} - {h.horaFin.split('T')[1].substring(0,5)}</td>
+                                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{h.diaSemana === 0 ? 'Domingo' : dias[h.diaSemana - 1]}</td>
+                                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{h.horaInicio} - {h.horaFin}</td>
                                     <td style={{ border: '1px solid #ddd', padding: '8px', fontWeight: 'bold' }}>{h.tipoPrecio}</td>
                                 </tr>
                             ))}

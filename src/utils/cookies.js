@@ -24,7 +24,7 @@ export const getSessionCookie = () => {
     if (c.indexOf(nameEQ) === 0) {
       try {
         return JSON.parse(decodeURIComponent(c.substring(nameEQ.length)));
-      } catch (e) {
+      } catch {
         return null;
       }
     }

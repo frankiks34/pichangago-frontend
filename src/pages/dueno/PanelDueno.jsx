@@ -1,232 +1,247 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useToast } from '../../hooks/useToast';
+import ToastContainer from '../../components/ToastContainer';
 import { duenoService } from '../../services/duenoService';
+import { localService } from '../../services/localService';
+import { getImageUrl } from '../../utils/imageUrl';
+import { formatValidationErrors } from '../../utils/validationErrors';
+import { useSocket } from '../../hooks/useSocket';
+import GestionLocales from '../../components/dueno/GestionLocales';
+import DashboardDueno from '../../components/dueno/DashboardDueno';
+import ReportesDueno from '../../components/dueno/ReportesDueno';
+import AgendaDueno from '../../components/dueno/AgendaDueno';
+import ConfigDueno from '../../components/dueno/ConfigDueno';
+import ModalNuevaCancha from '../../components/dueno/ModalNuevaCancha';
+import ModalGestionCancha from '../../components/dueno/ModalGestionCancha';
+import ModalDetalleReserva from '../../components/dueno/ModalDetalleReserva';
 
 export default function PanelDueno() {
+    const [tabActiva, setTabActiva] = useState('canchas');
     const [loading, setLoading] = useState(true);
-    const [tieneCanchas, setTieneCanchas] = useState(false);
-    const [errorPerfil, setErrorPerfil] = useState(false);
-    const [vistaActiva, setVistaActiva] = useState('agenda'); // 'agenda' o 'canchas'
-    
-    // Filtros y datos de operación
-    const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0]);
-    const [slots, setSlots] = useState([]);
-    const [canchasUnicas, setCanchasUnicas] = useState([]);
-    
-    // Estados para modales rápidos de ofertas y edición
-    const [slotSeleccionado, setSlotSeleccionado] = useState(null);
-    const [descuento, setDescuento] = useState(20);
-    const [precioBaseSlot, setPrecioBaseSlot] = useState(0);
-    
-    // Estado para el formulario de edición rápida (D-05)
-    const [canchaEditando, setCanchaEditando] = useState(null);
+    const [perfilConfigurado, setPerfilConfigurado] = useState(false);
+    const [canchas, setCanchas] = useState([]);
+    const [locales, setLocales] = useState([]);
+    const [mensajeGlobal, setMensajeGlobal] = useState('');
+    const [configVersion, setConfigVersion] = useState(0);
 
-    const [resumen, setResumen] = useState({ reservasHoy: 0, ingresosHoy: 0, ocupacion: 0 });
+    const [mostrarFormNuevaCancha, setMostrarFormNuevaCancha] = useState(false);
+    const [gestionCanchaId, setGestionCanchaId] = useState(null);
+    const [reservaDetalleId, setReservaDetalleId] = useState(null);
 
-    const cargarDatosPanel = async () => {
+    const [datosFinancieros, setDatosFinancieros] = useState({ ruc: '', razonSocial: '', cci: '', banco: 'BCP' });
+
+    const inicializarRef = useRef(null);
+
+    const { toasts, addToast, removeToast } = useToast();
+    const handleMensaje = useCallback((msg) => {
+        setMensajeGlobal(msg);
+        const type = msg.includes('❌') ? 'error' : msg.includes('⚠️') ? 'warning' : 'success';
+        addToast(msg, type);
+    }, [addToast]);
+
+    const handleNuevaReserva = useCallback((data) => {
+        handleMensaje(`📩 Nueva reserva de ${data.jugadorNombre} en ${data.nombreCancha} (${data.horaInicio} - ${data.horaFin})`);
+        if (inicializarRef.current) inicializarRef.current();
+    }, [handleMensaje]);
+
+    useSocket(handleNuevaReserva);
+
+    const inicializarModuloDueno = async () => {
         setLoading(true);
         try {
-            const res = await duenoService.obtenerAgendaDiaria(fechaFiltro);
-
-            if (res.status === 'success') {
-                if (res.data && res.data.length > 0) {
-                    setTieneCanchas(true);
-                    setSlots(res.data);
-                    
-                    // Extraer una lista de canchas únicas para la sección "Mis Canchas"
-                    const mapeoEspejo = {};
-                    res.data.forEach(s => {
-                        if (!mapeoEspejo[s.ID_Cancha]) {
-                            mapeoEspejo[s.ID_Cancha] = {
-                                ID_Cancha: s.ID_Cancha,
-                                Nombre: s.CanchaNombre,
-                                Tipo: s.CanchaTipo,
-                                Estado: s.EstadoSlot === 'BLOQUEADO' ? 'SUSPENDIDO' : 'DISPONIBLE', // Estado base
-                                Precio_Base: s.Tipo_Precio === 'BASE' ? s.Monto_Total : 90 // fallback referencial
-                            };
-                        }
-                    });
-                    setCanchasUnicas(Object.values(mapeoEspejo));
-                    
-                    const reservados = res.data.filter(s => s.ID_Reserva);
-                    const ingresos = reservados.reduce((acc, cur) => acc + (cur.Monto_Total || 0), 0);
-                    const porc = Math.round((reservados.length / res.data.length) * 100) || 0;
-
-                    setResumen({ reservasHoy: reservados.length, ingresosHoy: ingresos, ocupacion: porc });
-                } else {
-                    setTieneCanchas(false);
-                }
-            } else if (res.error && res.error.includes('inicializado')) {
-                setErrorPerfil(true);
+            const [resCanchas, resLocales] = await Promise.all([
+                duenoService.obtenerMisCanchas(),
+                localService.listarMisLocales()
+            ]);
+            if (resLocales.status === 'success') setLocales(resLocales.data || []);
+            if (resCanchas.status === 'success') {
+                setPerfilConfigurado(true);
+                setCanchas(resCanchas.data || []);
+            } else {
+                setPerfilConfigurado(false);
+                setCanchas([]);
             }
         } catch (error) {
-            console.error("🚨 Error al conectar con el panel:", error);
+            console.error('🚨 Error de sincronización del panel:', error);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        cargarDatosPanel();
-    }, [fechaFiltro]);
+        inicializarRef.current = inicializarModuloDueno;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        inicializarModuloDueno();
+    }, []);
 
-    // D-10 y D-11: Alternar estados del slot
-    const handleCambiarEstado = async (idSlot, nuevoEstado) => {
-        const res = await duenoService.actualizarEstadoSlot(idSlot, nuevoEstado);
-        if (res.status === 'success') {
-            cargarDatosPanel();
-        } else {
-            alert(`❌ Error: ${res.error}`);
-        }
-    };
-
-    // D-06: Borrado Lógico / Suspender Cancha Completa
-    const handleSuspenderCancha = async (idCancha, estadoActual) => {
+    const handleToggleEstadoCancha = async (idCancha, estadoActual) => {
         const nuevoEstado = estadoActual === 'DISPONIBLE' ? 'SUSPENDIDO' : 'DISPONIBLE';
-        const confirmar = window.confirm(`¿Seguro que deseas cambiar el estado de la cancha a ${nuevoEstado}?`);
-        if (!confirmar) return;
-
         const res = await duenoService.cambiarEstadoCancha(idCancha, nuevoEstado);
         if (res.status === 'success') {
-            alert(`✅ Cancha configurada como ${nuevoEstado}`);
-            cargarDatosPanel();
-        } else {
-            alert(`❌ Error: ${res.error}`);
+            handleMensaje(nuevoEstado === 'SUSPENDIDO' ? '⏸️ Cancha suspendida.' : '▶️ Cancha activada.');
+            inicializarModuloDueno();
         }
     };
 
-    const handlePublicarOferta = async (e) => {
+    const handleOnboardingFinanciero = async (e) => {
         e.preventDefault();
-        const precioConDescuento = precioBaseSlot - (precioBaseSlot * (descuento / 100));
-        const res = await duenoService.crearOfertaSlot(slotSeleccionado, {
-            porcentajeDescuento: descuento,
-            precioOfertado: precioConDescuento,
-            fechaExpira: fechaFiltro
-        });
+        if (!/^(10|20)\d{9}$/.test(datosFinancieros.ruc)) {
+            handleMensaje('⚠️ RUC inválido. Debe tener 11 dígitos, iniciar con 10 (natural) o 20 (jurídico).');
+            return;
+        }
+        if (!/^\d{20}$/.test(datosFinancieros.cci)) {
+            handleMensaje('⚠️ El CCI debe tener exactamente 20 dígitos numéricos.');
+            return;
+        }
+        const res = await duenoService.actualizarPerfilFinanciero(datosFinancieros);
         if (res.status === 'success') {
-            setSlotSeleccionado(null);
-            cargarDatosPanel();
+            handleMensaje('🎉 ¡Perfil Financiero guardado! Ahora registra un local.');
+            setPerfilConfigurado(true);
+            setTabActiva('locales');
+            inicializarModuloDueno();
+        } else {
+            handleMensaje(`❌ ${formatValidationErrors(res)}`);
         }
     };
 
-    const obtenerEstiloEstado = (estado) => {
-        switch (estado.toUpperCase()) {
-            case 'RESERVADO': return { borderLeft: '8px solid #0056b3', background: '#e6f0fa' };
-            case 'BLOQUEADO': return { borderLeft: '8px solid #6c757d', background: '#f1f3f5' };
-            case 'OFERTA': return { borderLeft: '8px solid #ffc107', background: '#fff9e6' };
-            default: return { borderLeft: '8px solid #28a745', background: '#eafaf1' };
-        }
-    };
+    if (loading) return <div style={{ padding: '100px', textAlign: 'center' }} role="status"><h2>Sincronizando PichangaGO... ⚽</h2></div>;
 
-    if (errorPerfil) return <div style={{ padding: '100px', textAlign: 'center' }}><h2>⚠️ Error de Perfil Inicial</h2></div>;
-    if (!tieneCanchas && !loading) {
+    if (!perfilConfigurado && canchas.length === 0) {
         return (
-            <div style={{ padding: '100px', textAlign: 'center' }}>
-                <h2>🏟️ No tienes canchas creadas</h2>
-                <Link to="/panel-dueno/onboarding" style={{ background: '#00b48a', color: 'white', padding: '12px 24px', borderRadius: '6px', textDecoration: 'none' }}>Crear Cancha</Link>
+            <div style={{ padding: '100px 24px', maxWidth: '550px', margin: '0 auto', fontFamily: 'Arial' }}>
+                <h2 style={{ fontSize: '26px', marginBottom: '8px' }}>💳 Configuración de Pagos</h2>
+                <p style={{ color: 'gray', marginBottom: '20px' }}>Tu cuenta de dueño está casi lista. Solo necesitamos tus datos bancarios para depositar tus ganancias.</p>
+                <form onSubmit={handleOnboardingFinanciero} style={{ border: '1px solid #ddd', padding: '24px', borderRadius: '8px', background: '#fff' }}>
+                    <div style={{ marginBottom: '10px' }}>
+                        <label>📋 RUC <span style={{ color: 'red' }}>*</span>:</label>
+                        <input type="text" maxLength={11} required placeholder="12345678901" style={{ width: '100%', padding: '8px', marginTop: '4px' }} onChange={e => /^\d*$/.test(e.target.value) && setDatosFinancieros({ ...datosFinancieros, ruc: e.target.value })} />
+                        <span style={{ fontSize: '11px', color: '#888' }}>11 dígitos — inicia con 10 (natural) o 20 (jurídico)</span>
+                    </div>
+                    <div style={{ marginBottom: '10px' }}>
+                        <label>🏢 Razón Social <span style={{ color: 'red' }}>*</span>:</label>
+                        <input type="text" required placeholder="Ej: Mi Empresa SAC" maxLength={100} style={{ width: '100%', padding: '8px', marginTop: '4px' }} onChange={e => setDatosFinancieros({ ...datosFinancieros, razonSocial: e.target.value })} />
+                    </div>
+                    <div style={{ marginBottom: '10px' }}>
+                        <label>🏦 Banco <span style={{ color: 'red' }}>*</span>:</label>
+                        <select style={{ width: '100%', padding: '8px', marginTop: '4px' }} onChange={e => setDatosFinancieros({ ...datosFinancieros, banco: e.target.value })}>
+                            <option value="BCP">BCP</option><option value="Interbank">Interbank</option><option value="BBVA">BBVA</option>
+                        </select>
+                    </div>
+                    <div style={{ marginBottom: '20px' }}>
+                        <label>🔢 CCI <span style={{ color: 'red' }}>*</span>:</label>
+                        <input type="text" maxLength={20} required placeholder="12345678901234567890" style={{ width: '100%', padding: '8px', marginTop: '4px' }} onChange={e => /^\d*$/.test(e.target.value) && setDatosFinancieros({ ...datosFinancieros, cci: e.target.value })} />
+                        <span style={{ fontSize: '11px', color: '#888' }}>20 dígitos, solo números</span>
+                    </div>
+                    <button type="submit" style={{ background: '#00b48a', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', width: '100%', fontWeight: 'bold', cursor: 'pointer' }}>Guardar e Ir al Panel</button>
+                </form>
             </div>
         );
     }
 
     return (
         <div style={{ padding: '80px 24px', maxWidth: '1200px', margin: '0 auto', fontFamily: 'Arial, sans-serif' }}>
-            
-            {/* Menú de pestañas superior */}
-            <div style={{ display: 'flex', borderBottom: '2px solid #eee', marginBottom: '20px', gap: '20px' }}>
-                <button onClick={() => setVistaActiva('agenda')} style={{ background: 'none', border: 'none', padding: '10px 20px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', borderBottom: vistaActiva === 'agenda' ? '3px solid #00b48a' : 'none', color: vistaActiva === 'agenda' ? '#00b48a' : '#666' }}>
-                    📅 Agenda Operativa
-                </button>
-                <button onClick={() => setVistaActiva('canchas')} style={{ background: 'none', border: 'none', padding: '10px 20px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', borderBottom: vistaActiva === 'canchas' ? '3px solid #00b48a' : 'none', color: vistaActiva === 'canchas' ? '#00b48a' : '#666' }}>
-                    🏟️ Mis Canchas (CRUD)
-                </button>
+            <div role="tablist" aria-label="Secciones del panel de dueño" onKeyDown={e => {
+                const tabs = ['locales', 'canchas', 'agenda', 'dashboard', 'reportes', 'config'];
+                const idx = tabs.indexOf(tabActiva);
+                if (e.key === 'ArrowRight') { e.preventDefault(); setTabActiva(tabs[(idx + 1) % tabs.length]); }
+                if (e.key === 'ArrowLeft') { e.preventDefault(); setTabActiva(tabs[(idx - 1 + tabs.length) % tabs.length]); }
+            }} style={{ display: 'flex', borderBottom: '2px solid #eee', marginBottom: '25px', gap: '12px', flexWrap: 'wrap' }}>
+                <button role="tab" aria-selected={tabActiva === 'locales'} tabIndex={tabActiva === 'locales' ? 0 : -1} onClick={() => setTabActiva('locales')} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'locales' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'locales' ? '#00b48a' : '#666', fontSize: '14px' }}>🏢 Locales</button>
+                <button role="tab" aria-selected={tabActiva === 'canchas'} tabIndex={tabActiva === 'canchas' ? 0 : -1} onClick={() => setTabActiva('canchas')} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'canchas' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'canchas' ? '#00b48a' : '#666', fontSize: '14px' }}>🏟️ Canchas ({canchas.length})</button>
+                <button role="tab" aria-selected={tabActiva === 'agenda'} tabIndex={tabActiva === 'agenda' ? 0 : -1} onClick={() => setTabActiva('agenda')} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'agenda' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'agenda' ? '#00b48a' : '#666', fontSize: '14px' }}>📅 Agenda</button>
+                <button role="tab" aria-selected={tabActiva === 'dashboard'} tabIndex={tabActiva === 'dashboard' ? 0 : -1} onClick={() => setTabActiva('dashboard')} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'dashboard' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'dashboard' ? '#00b48a' : '#666', fontSize: '14px' }}>📊 Dashboard</button>
+                <button role="tab" aria-selected={tabActiva === 'reportes'} tabIndex={tabActiva === 'reportes' ? 0 : -1} onClick={() => setTabActiva('reportes')} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'reportes' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'reportes' ? '#00b48a' : '#666', fontSize: '14px' }}>📈 Reportes</button>
+                <button role="tab" aria-selected={tabActiva === 'config'} tabIndex={tabActiva === 'config' ? 0 : -1} onClick={() => { setTabActiva('config'); setConfigVersion(v => v + 1); }} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'config' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'config' ? '#00b48a' : '#666', fontSize: '14px' }}>⚙️ Configuración</button>
             </div>
 
-            {/* VISTA 1: AGENDA DIARIA */}
-            {vistaActiva === 'agenda' && (
-                <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-                        <h3>🎛️ Monitor de Horarios del Complejo</h3>
-                        <input type="date" value={fechaFiltro} onChange={(e) => setFechaFiltro(e.target.value)} style={{ padding: '6px' }} />
-                    </div>
+            <ToastContainer toasts={toasts} removeToast={removeToast} />
+            <div aria-live="polite" aria-atomic="true" style={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0,0,0,0)' }} role="status">{mensajeGlobal}</div>
 
-                    <div style={{ display: 'grid', gap: '15px' }}>
-                        {slots.map((slot) => (
-                            <div key={slot.ID_Slots} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', borderRadius: '6px', border: '1px solid #eee', ...obtenerEstiloEstado(slot.EstadoSlot) }}>
-                                <div>
-                                    <span style={{ fontWeight: 'bold', display: 'block' }}>⏰ {slot.Fecha_Inicio.split('T')[1].substring(0, 5)} - {slot.Fecha_Fin.split('T')[1].substring(0, 5)}</span>
-                                    <span style={{ fontSize: '14px', color: '#666' }}>🏟️ {slot.CanchaNombre} | Tarifa: <strong>{slot.Tipo_Precio}</strong></span>
-                                </div>
-                                <div style={{ flex: 1, marginLeft: '40px' }}>
-                                    {slot.EstadoSlot.toUpperCase() === 'RESERVADO' ? (
-                                        <span style={{ fontSize: '14px' }}>👤 <strong>{slot.JugadorNombre}</strong> ({slot.JugadorTelefono})</span>
-                                    ) : <span style={{ color: '#999' }}>Disponible</span>}
-                                </div>
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                    {slot.EstadoSlot === 'DISPONIBLE' && (
-                                        <>
-                                            <button onClick={() => handleCambiarEstado(slot.ID_Slots, 'BLOQUEADO')} style={{ background: '#6c757d', color: 'white', border: 'none', padding: '6px', borderRadius: '4px', cursor: 'pointer' }}>🔒 Bloquear</button>
-                                            <button onClick={() => { setSlotSeleccionado(slot.ID_Slots); setPrecioBaseSlot(90); }} style={{ background: '#ff9800', color: 'white', border: 'none', padding: '6px', borderRadius: '4px', cursor: 'pointer' }}>🔥 Oferta</button>
-                                        </>
-                                    )}
-                                    {slot.EstadoSlot === 'BLOQUEADO' && <button onClick={() => handleCambiarEstado(slot.ID_Slots, 'DISPONIBLE')} style={{ background: '#28a745', color: 'white', border: 'none', padding: '6px', borderRadius: '4px' }}>释放 Liberar</button>}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </>
+            {tabActiva === 'locales' && (
+                <GestionLocales onMensaje={handleMensaje} />
             )}
 
-            {/* VISTA 2: CRUD DE MIS CANCHAS */}
-            {vistaActiva === 'canchas' && (
+            {tabActiva === 'canchas' && (
                 <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                        <h3>🛠️ Catálogo de Infraestructura</h3>
-                        <Link to="/panel-dueno/onboarding" style={{ background: '#00b48a', color: 'white', padding: '10px 20px', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold' }}>➕ Registrar Otra Cancha</Link>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'center' }}>
+                        <h3>Mis Canchas</h3>
+                        <button onClick={() => setMostrarFormNuevaCancha(true)} style={{ background: '#00b48a', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>➕ Nueva Cancha</button>
                     </div>
 
-                    <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: '8px', overflow: 'hidden', border: '1px solid #eee' }}>
-                        <thead>
-                            <tr style={{ background: '#1e2530', color: 'white', textAlign: 'left' }}>
-                                <th style={{ padding: '12px' }}>ID Cancha</th>
-                                <th style={{ padding: '12px' }}>Nombre</th>
-                                <th style={{ padding: '12px' }}>Configuración</th>
-                                <th style={{ padding: '12px' }}>Estado Operativo</th>
-                                <th style={{ padding: '12px' }}>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {canchasUnicas.map(cancha => (
-                                <tr key={cancha.ID_Cancha} style={{ borderBottom: '1px solid #eee' }}>
-                                    <td style={{ padding: '12px', fontWeight: 'bold' }}>{cancha.ID_Cancha}</td>
-                                    <td style={{ padding: '12px' }}>{cancha.Nombre}</td>
-                                    <td style={{ padding: '12px', color: '#666' }}>{cancha.Tipo}</td>
-                                    <td style={{ padding: '12px' }}>
-                                        <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', background: cancha.Estado === 'DISPONIBLE' ? '#eafaf1' : '#fce8e6', color: cancha.Estado === 'DISPONIBLE' ? '#28a745' : '#dc3545' }}>
-                                            {cancha.Estado}
-                                        </span>
-                                    </td>
-                                    <td style={{ padding: '12px', display: 'flex', gap: '10px' }}>
-                                        <button onClick={() => setCanchaEditando(cancha)} style={{ background: '#0056b3', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}>✏️ Editar</button>
-                                        <button onClick={() => handleSuspenderCancha(cancha.ID_Cancha, cancha.Estado)} style={{ background: cancha.Estado === 'DISPONIBLE' ? '#dc3545' : '#28a745', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}>
-                                            {cancha.Estado === 'DISPONIBLE' ? '❌ Suspender' : '✅ Reactivar'}
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    {canchas.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '50px', background: '#f8f9fa', borderRadius: '8px' }}>
+                            <h3>Aún no tienes canchas registradas.</h3>
+                            <p style={{ color: 'gray' }}>Registra tu primera cancha para empezar a recibir reservas.</p>
+                        </div>
+                    ) : (
+                        <>
+                            <p style={{ fontSize: '13px', color: '#666', marginBottom: '15px' }}>Haz clic en <strong>"⚙️ Gestionar"</strong> para editar la cancha, configurar sus horarios o administrar fotos.</p>
+                            <div style={{ display: 'grid', gap: '20px' }}>
+                                {canchas.map((cancha) => (
+                                    <div key={cancha.ID_Cancha} style={{ border: '1px solid #ddd', padding: '20px', borderRadius: '8px', display: 'flex', gap: '20px', alignItems: 'center', background: cancha.Estado === 'SUSPENDIDO' ? '#f8d7da' : '#fff' }}>
+                                        <img src={getImageUrl(cancha.Fotos?.[0]?.URL_Foto)} alt={cancha.Nombre || 'Cancha'} style={{ width: '120px', height: '90px', objectFit: 'cover', borderRadius: '6px', background: '#eee' }} />
+                                        <div style={{ flex: 1 }}>
+                                            <h4 style={{ margin: '0 0 5px 0', fontSize: '18px' }}>
+                                                🏟️ {cancha.Nombre}
+                                                <span style={{ fontSize: '12px', padding: '3px 8px', borderRadius: '12px', marginLeft: '8px', background: cancha.Estado === 'DISPONIBLE' ? '#d4edda' : '#fee2e2', color: cancha.Estado === 'DISPONIBLE' ? 'green' : 'red' }}>{cancha.Estado}</span>
+                                            </h4>
+                                            <p style={{ margin: '0 0 5px 0', color: '#666', fontSize: '14px' }}>📍 {cancha.LocalDireccion || cancha.Direccion} - {cancha.LocalDistrito || cancha.Distrito} {cancha.LocalNombre ? <span style={{ color: '#00b48a' }}>({cancha.LocalNombre})</span> : ''}</p>
+                                            <span style={{ fontSize: '13px' }}>Base S/{parseFloat(cancha.Precio_Base).toFixed(2)} | Prime S/{parseFloat(cancha.Precio_Prime || cancha.Precio_Base).toFixed(2)} | Baja S/{parseFloat(cancha.Precio_Baja || cancha.Precio_Base).toFixed(2)}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '8px', flexDirection: 'column', minWidth: '130px' }}>
+                                            <button onClick={() => setGestionCanchaId(cancha.ID_Cancha)} style={{ background: '#1e2530', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>⚙️ Gestionar</button>
+                                            <button onClick={() => handleToggleEstadoCancha(cancha.ID_Cancha, cancha.Estado)} style={{ background: cancha.Estado === 'DISPONIBLE' ? '#dc3545' : '#28a745', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
+                                                {cancha.Estado === 'DISPONIBLE' ? '⏸ Pausar Cancha' : '▶ Reactivar Cancha'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
 
-            {/* Modal de edición rápida si se requiere (D-05) */}
-            {canchaEditando && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div style={{ background: 'white', padding: '24px', borderRadius: '8px', maxWidth: '400px', width: '100%' }}>
-                        <h3>✏️ Editar Cancha {canchaEditando.ID_Cancha}</h3>
-                        <p style={{ fontSize: '13px', color: '#666' }}>Modifica la información estructural del complejo.</p>
-                        <button onClick={() => setCanchaEditando(null)} style={{ background: '#6c757d', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', width: '100%', marginTop: '15px' }}>Cerrar y Volver</button>
-                    </div>
-                </div>
+            {tabActiva === 'agenda' && (
+                <AgendaDueno
+                    canchas={canchas}
+                    onMensaje={handleMensaje}
+                    onAbrirDetalleReserva={setReservaDetalleId}
+                    onAbrirGestionCancha={(cancha) => setGestionCanchaId(cancha.ID_Cancha)}
+                />
+            )}
+
+            {tabActiva === 'dashboard' && <DashboardDueno />}
+
+            {tabActiva === 'reportes' && <ReportesDueno onMensaje={handleMensaje} />}
+
+            {tabActiva === 'config' && (
+                <ConfigDueno version={configVersion} onActualizar={inicializarModuloDueno} />
+            )}
+
+            {mostrarFormNuevaCancha && (
+                <ModalNuevaCancha
+                    locales={locales}
+                    onCerrar={() => setMostrarFormNuevaCancha(false)}
+                    onMensaje={handleMensaje}
+                    onActualizar={inicializarModuloDueno}
+                />
+            )}
+
+            {gestionCanchaId && (
+                <ModalGestionCancha
+                    canchaId={gestionCanchaId}
+                    onCerrar={() => setGestionCanchaId(null)}
+                    onMensaje={handleMensaje}
+                    onActualizar={inicializarModuloDueno}
+                />
+            )}
+
+            {reservaDetalleId && (
+                <ModalDetalleReserva
+                    idReserva={reservaDetalleId}
+                    onCerrar={() => setReservaDetalleId(null)}
+                />
             )}
         </div>
     );
