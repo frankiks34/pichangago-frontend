@@ -20,5 +20,10 @@ export const canchaService = {
   obtenerSlots: async (idCancha, fecha) => {
     const res = await apiFetch(`/api/canchas/${idCancha}/slots?fecha=${fecha}`);
     return res.json();
+  },
+
+  obtenerOfertasHoy: async () => {
+    const res = await apiFetch('/api/canchas/ofertas-hoy');
+    return res.json();
   }
 };
