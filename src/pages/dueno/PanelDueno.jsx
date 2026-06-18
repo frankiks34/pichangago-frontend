@@ -4,19 +4,18 @@ import ToastContainer from '../../components/ToastContainer';
 import { duenoService } from '../../services/duenoService';
 import { localService } from '../../services/localService';
 import { getImageUrl } from '../../utils/imageUrl';
-import { formatValidationErrors } from '../../utils/validationErrors';
 import { useSocket } from '../../hooks/useSocket';
 import GestionLocales from '../../components/dueno/GestionLocales';
 import DashboardDueno from '../../components/dueno/DashboardDueno';
 import ReportesDueno from '../../components/dueno/ReportesDueno';
 import AgendaDueno from '../../components/dueno/AgendaDueno';
-import ConfigDueno from '../../components/dueno/ConfigDueno';
+import PerfilDueno from '../../components/dueno/PerfilDueno';
 import ModalNuevaCancha from '../../components/dueno/ModalNuevaCancha';
 import ModalGestionCancha from '../../components/dueno/ModalGestionCancha';
 import ModalDetalleReserva from '../../components/dueno/ModalDetalleReserva';
 
 export default function PanelDueno() {
-    const [tabActiva, setTabActiva] = useState('canchas');
+    const [tabActiva, setTabActiva] = useState(null);
     const [loading, setLoading] = useState(true);
     const [perfilConfigurado, setPerfilConfigurado] = useState(false);
     const [canchas, setCanchas] = useState([]);
@@ -27,8 +26,6 @@ export default function PanelDueno() {
     const [mostrarFormNuevaCancha, setMostrarFormNuevaCancha] = useState(false);
     const [gestionCanchaId, setGestionCanchaId] = useState(null);
     const [reservaDetalleId, setReservaDetalleId] = useState(null);
-
-    const [datosFinancieros, setDatosFinancieros] = useState({ ruc: '', razonSocial: '', cci: '', banco: 'BCP' });
 
     const inicializarRef = useRef(null);
 
@@ -49,18 +46,20 @@ export default function PanelDueno() {
     const inicializarModuloDueno = async () => {
         setLoading(true);
         try {
-            const [resCanchas, resLocales] = await Promise.all([
+            const [resCanchas, resLocales, resPerfil] = await Promise.all([
                 duenoService.obtenerMisCanchas(),
-                localService.listarMisLocales()
+                localService.listarMisLocales(),
+                duenoService.obtenerPerfilFinanciero()
             ]);
             if (resLocales.status === 'success') setLocales(resLocales.data || []);
             if (resCanchas.status === 'success') {
-                setPerfilConfigurado(true);
-                setCanchas(resCanchas.data || []);
+                const unicas = Array.from(new Map((resCanchas.data || []).map(c => [c.ID_Cancha, c])).values());
+                setCanchas(unicas);
             } else {
-                setPerfilConfigurado(false);
                 setCanchas([]);
             }
+            const perfilOk = resPerfil.status === 'success' && resPerfil.data?.Ruc;
+            setPerfilConfigurado(!!perfilOk);
         } catch (error) {
             console.error('🚨 Error de sincronización del panel:', error);
         } finally {
@@ -74,6 +73,12 @@ export default function PanelDueno() {
         inicializarModuloDueno();
     }, []);
 
+    useEffect(() => {
+        if (!loading && perfilConfigurado && tabActiva === null) {
+            setTabActiva(locales.length === 0 ? 'locales' : 'dashboard');
+        }
+    }, [loading, perfilConfigurado, locales, tabActiva]);
+
     const handleToggleEstadoCancha = async (idCancha, estadoActual) => {
         const nuevoEstado = estadoActual === 'DISPONIBLE' ? 'SUSPENDIDO' : 'DISPONIBLE';
         const res = await duenoService.cambiarEstadoCancha(idCancha, nuevoEstado);
@@ -83,57 +88,12 @@ export default function PanelDueno() {
         }
     };
 
-    const handleOnboardingFinanciero = async (e) => {
-        e.preventDefault();
-        if (!/^(10|20)\d{9}$/.test(datosFinancieros.ruc)) {
-            handleMensaje('⚠️ RUC inválido. Debe tener 11 dígitos, iniciar con 10 (natural) o 20 (jurídico).');
-            return;
-        }
-        if (!/^\d{20}$/.test(datosFinancieros.cci)) {
-            handleMensaje('⚠️ El CCI debe tener exactamente 20 dígitos numéricos.');
-            return;
-        }
-        const res = await duenoService.actualizarPerfilFinanciero(datosFinancieros);
-        if (res.status === 'success') {
-            handleMensaje('🎉 ¡Perfil Financiero guardado! Ahora registra un local.');
-            setPerfilConfigurado(true);
-            setTabActiva('locales');
-            inicializarModuloDueno();
-        } else {
-            handleMensaje(`❌ ${formatValidationErrors(res)}`);
-        }
-    };
-
     if (loading) return <div style={{ padding: '100px', textAlign: 'center' }} role="status"><h2>Sincronizando PichangaGO... ⚽</h2></div>;
 
-    if (!perfilConfigurado && canchas.length === 0) {
+    if (!perfilConfigurado) {
         return (
-            <div style={{ padding: '100px 24px', maxWidth: '550px', margin: '0 auto', fontFamily: 'Arial' }}>
-                <h2 style={{ fontSize: '26px', marginBottom: '8px' }}>💳 Configuración de Pagos</h2>
-                <p style={{ color: 'gray', marginBottom: '20px' }}>Tu cuenta de dueño está casi lista. Solo necesitamos tus datos bancarios para depositar tus ganancias.</p>
-                <form onSubmit={handleOnboardingFinanciero} style={{ border: '1px solid #ddd', padding: '24px', borderRadius: '8px', background: '#fff' }}>
-                    <div style={{ marginBottom: '10px' }}>
-                        <label>📋 RUC <span style={{ color: 'red' }}>*</span>:</label>
-                        <input type="text" maxLength={11} required placeholder="12345678901" style={{ width: '100%', padding: '8px', marginTop: '4px' }} onChange={e => /^\d*$/.test(e.target.value) && setDatosFinancieros({ ...datosFinancieros, ruc: e.target.value })} />
-                        <span style={{ fontSize: '11px', color: '#888' }}>11 dígitos — inicia con 10 (natural) o 20 (jurídico)</span>
-                    </div>
-                    <div style={{ marginBottom: '10px' }}>
-                        <label>🏢 Razón Social <span style={{ color: 'red' }}>*</span>:</label>
-                        <input type="text" required placeholder="Ej: Mi Empresa SAC" maxLength={100} style={{ width: '100%', padding: '8px', marginTop: '4px' }} onChange={e => setDatosFinancieros({ ...datosFinancieros, razonSocial: e.target.value })} />
-                    </div>
-                    <div style={{ marginBottom: '10px' }}>
-                        <label>🏦 Banco <span style={{ color: 'red' }}>*</span>:</label>
-                        <select style={{ width: '100%', padding: '8px', marginTop: '4px' }} onChange={e => setDatosFinancieros({ ...datosFinancieros, banco: e.target.value })}>
-                            <option value="BCP">BCP</option><option value="Interbank">Interbank</option><option value="BBVA">BBVA</option>
-                        </select>
-                    </div>
-                    <div style={{ marginBottom: '20px' }}>
-                        <label>🔢 CCI <span style={{ color: 'red' }}>*</span>:</label>
-                        <input type="text" maxLength={20} required placeholder="12345678901234567890" style={{ width: '100%', padding: '8px', marginTop: '4px' }} onChange={e => /^\d*$/.test(e.target.value) && setDatosFinancieros({ ...datosFinancieros, cci: e.target.value })} />
-                        <span style={{ fontSize: '11px', color: '#888' }}>20 dígitos, solo números</span>
-                    </div>
-                    <button type="submit" style={{ background: '#00b48a', color: 'white', border: 'none', padding: '12px', borderRadius: '6px', width: '100%', fontWeight: 'bold', cursor: 'pointer' }}>Guardar e Ir al Panel</button>
-                </form>
+            <div style={{ padding: '80px 24px', maxWidth: '700px', margin: '0 auto', fontFamily: 'Arial, sans-serif' }}>
+                <PerfilDueno onActualizar={inicializarModuloDueno} modoOnboarding />
             </div>
         );
     }
@@ -141,17 +101,17 @@ export default function PanelDueno() {
     return (
         <div style={{ padding: '80px 24px', maxWidth: '1200px', margin: '0 auto', fontFamily: 'Arial, sans-serif' }}>
             <div role="tablist" aria-label="Secciones del panel de dueño" onKeyDown={e => {
-                const tabs = ['locales', 'canchas', 'agenda', 'dashboard', 'reportes', 'config'];
+                const tabs = ['dashboard', 'locales', 'canchas', 'agenda', 'reportes', 'perfil'];
                 const idx = tabs.indexOf(tabActiva);
                 if (e.key === 'ArrowRight') { e.preventDefault(); setTabActiva(tabs[(idx + 1) % tabs.length]); }
                 if (e.key === 'ArrowLeft') { e.preventDefault(); setTabActiva(tabs[(idx - 1 + tabs.length) % tabs.length]); }
             }} style={{ display: 'flex', borderBottom: '2px solid #eee', marginBottom: '25px', gap: '12px', flexWrap: 'wrap' }}>
+                <button role="tab" aria-selected={tabActiva === 'dashboard'} tabIndex={tabActiva === 'dashboard' ? 0 : -1} onClick={() => setTabActiva('dashboard')} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'dashboard' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'dashboard' ? '#00b48a' : '#666', fontSize: '14px' }}>📊 Resumen</button>
                 <button role="tab" aria-selected={tabActiva === 'locales'} tabIndex={tabActiva === 'locales' ? 0 : -1} onClick={() => setTabActiva('locales')} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'locales' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'locales' ? '#00b48a' : '#666', fontSize: '14px' }}>🏢 Locales</button>
-                <button role="tab" aria-selected={tabActiva === 'canchas'} tabIndex={tabActiva === 'canchas' ? 0 : -1} onClick={() => setTabActiva('canchas')} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'canchas' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'canchas' ? '#00b48a' : '#666', fontSize: '14px' }}>🏟️ Canchas ({canchas.length})</button>
+                <button role="tab" aria-selected={tabActiva === 'canchas'} tabIndex={tabActiva === 'canchas' ? 0 : -1} onClick={() => setTabActiva('canchas')} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'canchas' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'canchas' ? '#00b48a' : '#666', fontSize: '14px' }}>🏟️ Mis Canchas ({canchas.length})</button>
                 <button role="tab" aria-selected={tabActiva === 'agenda'} tabIndex={tabActiva === 'agenda' ? 0 : -1} onClick={() => setTabActiva('agenda')} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'agenda' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'agenda' ? '#00b48a' : '#666', fontSize: '14px' }}>📅 Agenda</button>
-                <button role="tab" aria-selected={tabActiva === 'dashboard'} tabIndex={tabActiva === 'dashboard' ? 0 : -1} onClick={() => setTabActiva('dashboard')} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'dashboard' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'dashboard' ? '#00b48a' : '#666', fontSize: '14px' }}>📊 Dashboard</button>
                 <button role="tab" aria-selected={tabActiva === 'reportes'} tabIndex={tabActiva === 'reportes' ? 0 : -1} onClick={() => setTabActiva('reportes')} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'reportes' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'reportes' ? '#00b48a' : '#666', fontSize: '14px' }}>📈 Reportes</button>
-                <button role="tab" aria-selected={tabActiva === 'config'} tabIndex={tabActiva === 'config' ? 0 : -1} onClick={() => { setTabActiva('config'); setConfigVersion(v => v + 1); }} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'config' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'config' ? '#00b48a' : '#666', fontSize: '14px' }}>⚙️ Configuración</button>
+                <button role="tab" aria-selected={tabActiva === 'perfil'} tabIndex={tabActiva === 'perfil' ? 0 : -1} onClick={() => { setTabActiva('perfil'); setConfigVersion(v => v + 1); }} style={{ padding: '12px 16px', background: 'none', border: 'none', borderBottom: tabActiva === 'perfil' ? '3px solid #00b48a' : 'none', fontWeight: 'bold', cursor: 'pointer', color: tabActiva === 'perfil' ? '#00b48a' : '#666', fontSize: '14px' }}>👤 Mi Perfil</button>
             </div>
 
             <ToastContainer toasts={toasts} removeToast={removeToast} />
@@ -215,8 +175,8 @@ export default function PanelDueno() {
 
             {tabActiva === 'reportes' && <ReportesDueno onMensaje={handleMensaje} />}
 
-            {tabActiva === 'config' && (
-                <ConfigDueno version={configVersion} onActualizar={inicializarModuloDueno} />
+            {tabActiva === 'perfil' && (
+                <PerfilDueno version={configVersion} onActualizar={inicializarModuloDueno} />
             )}
 
             {mostrarFormNuevaCancha && (

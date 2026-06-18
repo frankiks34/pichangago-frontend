@@ -72,6 +72,20 @@ export const duenoService = {
         return response.json();
     },
 
+    obtenerPerfilDueno: async () => {
+        const response = await apiFetch('/api/dueno/perfil');
+        return response.json();
+    },
+
+    actualizarPerfilDueno: async (datos) => {
+        const response = await apiFetch('/api/dueno/perfil', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(datos)
+        });
+        return response.json();
+    },
+
     obtenerHorariosCancha: async (idCancha) => {
         const response = await apiFetch(`/api/dueno/canchas/${idCancha}/horarios`);
         return response.json();
@@ -164,8 +178,8 @@ export const duenoService = {
 
     obtenerHistorialReservas: async (filtros = {}) => {
         const params = new URLSearchParams();
-        if (filtros.fecha_desde) params.append('fecha_desde', filtros.fecha_desde);
-        if (filtros.fecha_hasta) params.append('fecha_hasta', filtros.fecha_hasta);
+        if (filtros.fecha_desde) params.append('fecha_inicio', filtros.fecha_desde);
+        if (filtros.fecha_hasta) params.append('fecha_fin', filtros.fecha_hasta);
         if (filtros.estado) params.append('estado', filtros.estado);
         const qs = params.toString();
         const response = await apiFetch(`/api/dueno/reservas/historial${qs ? '?' + qs : ''}`);

@@ -78,7 +78,7 @@ const Home = () => {
                 const fotoOferta = getImageUrl(of.Foto_URL || of.Fotos?.[0]?.URL_Foto);
                 const tieneDto = of.Precio_Original > 0 && of.Precio_Oferta > 0;
                 return (
-                  <Link key={of.ID_Cancha || i} to={`/cancha/${of.ID_Cancha}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <Link key={`${of.ID_Cancha}-${of.Hora_Inicio || ''}-${of.Hora_Fin || ''}-${i}`} to={`/cancha/${of.ID_Cancha}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                     <div style={{
                       background: '#1E2535', borderRadius: '12px', padding: '16px',
                       minWidth: '260px', border: '1px solid #2A3345', flexShrink: 0, cursor: 'pointer'
